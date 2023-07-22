@@ -6,7 +6,7 @@ mod hit;
 mod sphere;
 mod camera;
 
-use vec::{Point3, Color};
+use vec::{Vec3, Point3, Color};
 use ray::Ray;
 use hit::{Hit, World};
 use sphere::Sphere;
@@ -14,23 +14,15 @@ use rand::Rng;
 use camera::Camera;
 
 
-fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
-    let oc = r.origin() - center;
-    let a = r.direction().length().powi(2);
-    let half_b = oc.dot(r.direction());
-    let c = oc.length().powi(2) - radius * radius;
-    let discriminant = half_b * half_b - a * c;
-    
-    if discriminant < 0.0 {
-        -1.0
-    } else {
-        (-half_b - discriminant.sqrt()) / a
+fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
+    if depth <= 0 {
+        // If we've exceeded the ray bounce limit, no more light is gathered
+        return Color::new(0.0, 0.0, 0.0); 
     }
-}
-
-fn ray_color(r: &Ray, world: &World) -> Color {
-    if let Some(rec) = world.hit(r, 0.0, f64::INFINITY) {
-        0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0))
+    if let Some(rec) = world.hit(r, 0.001, f64::INFINITY) {
+        let target = rec.p + Vec3::random_in_hemisphere(rec.normal);
+        let r = Ray::new(rec.p, target - rec.p);
+        0.5 * ray_color(&r, world, depth - 1)
     }else{
         let unit_direction = r.direction().normalized();
         let t = 0.5 * (unit_direction.y() + 1.0);
@@ -45,6 +37,7 @@ fn main() {
     const IMAGE_WIDTH: u64 = 256;
     const IMAGE_HEIGHT: u64 = ((256 as f64) / ASPECT_RATIO) as u64;
     const SAMPLES_PER_PIXEL: u64 = 100;
+    const MAX_DEPTH: u64 = 5;
 
     // World
     let mut world = World::new();
@@ -72,7 +65,7 @@ fn main() {
                 let v = ((j as f64) + random_v) / ((IMAGE_HEIGHT - 1) as f64);
 
                 let r = cam.get_ray(u, v);
-                pixel_color += ray_color(&r, &world);
+                pixel_color += ray_color(&r, &world, MAX_DEPTH);
             }
 
             println!("{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
